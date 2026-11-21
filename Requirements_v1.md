@@ -7,17 +7,22 @@ Project Requirements
 4. A certificate is fetched with the new `get_certificate` message (spec section 4.1), naming the target user's Andrew ID in `cert_username`. The one specific error, `"no certificate for that user"`, is shown to the user as its own message, not as a program failure (same pattern as lab3's `verify_hmac` FAILED-vs-error distinction).
 5. A certificate is only trusted after verification succeeds, in the order spec section 13.3 lists: the file matches the 6-line CRLF format, the RSA-PSS/SHA-256/MGF1-SHA256/salt-32 signature verifies against the CA's public key, the certificate's own username matches the Andrew ID requested, the certificate's `p`/`alpha` match the pre-installed values, and the public key is in range `1..p-1`. A certificate that fails any of these is rejected and its public key is never used.
 6. A random 256-bit AES key is generated locally (not fetched from the server) and written out as a standard base64 string (44 characters), per the Lab 4 handout's requirement 3.
-7. That base64 string is El Gamal-encrypted 4 bytes (32 bits) at a time, using the recipient's verified public key and the shared `p`/`alpha`, following the El Gamal math from Lecture 10 ("An ElGamal Byte-level Implementation") applied to a 4-byte block instead of a single byte. Each group's `(sigma, y2)` pair is written as 8 big-endian bytes, base64-encoded to a 12-character line, one line per group, CRLF-terminated, 11 lines total for the 44-character key text.
+7. That base64 string is El Gamal-encrypted 4 bytes (32 bits) at a time, using the recipient's verified public key and the shared `p`/`alpha`. Each group's `(sigma, y2)` pair is written as 8 big-endian bytes, base64-encoded to a 12-character line, one line per group, CRLF-terminated, 11 lines total for the 44-character key text.
 
-   El Gamal encryption procedure (Lecture 10 notation, `p`/`alpha` as above, recipient's public key `beta = alpha^a mod p` where `a` is their private key):
-   - Split the 44-character base64 AES key string into 11 groups of 4 ASCII characters each, in order.
-   - For each group, treat its 4 bytes as a big-endian 32-bit unsigned integer `x` (the message for that group).
-   - Pick a fresh random secret exponent `b` in `{1, ..., p-1}` for that group (a new `b` per group, never reused).
-   - Compute `sigma = alpha^b mod p` (this is sent as `y1`).
-   - Compute the shared secret `delta = beta^b mod p`.
-   - Compute `y2 = delta * x mod p`.
-   - The encrypted group is the pair `(y1, y2) = (sigma, delta*x mod p)`.
-   - To decode (the recipient's side, not required by this client but used to test correctness): recompute `delta = sigma^a mod p` using the recipient's private key `a`; compute `delta^-1 mod p`; recover `x = delta^-1 * y2 mod p`.
+   End-to-end El Gamal procedure, worked out from the class's definitions below (`p` prime, `alpha` a primitive element mod `p`, both shared by everyone; every user's own private key is a secret integer `a`, and their public key is `beta = alpha^a mod p`, which is what ends up on their signed certificate):
+   - **Setup (done once, already completed for this course):** each user picks a private key `a`, a random integer, and publishes `beta = alpha^a mod p` as their public key.
+   - **Splitting the message:** the 44-character base64 AES key string is split into 11 groups of 4 ASCII characters each, in order. Each group's 4 bytes are read as one big-endian 32-bit unsigned integer `x` — the message for that group.
+   - **Encrypting one group**, for a recipient whose verified public key is `beta`:
+     1. Pick a fresh random secret integer `b` in `{1, ..., p-1}` (a new `b` for every group — never reused).
+     2. Compute `sigma = alpha^b mod p`. This is sent in the clear; it lets the recipient rebuild the same shared secret without ever knowing `b` itself.
+     3. Compute the shared secret `delta = beta^b mod p`. Nobody except the sender (who knows `b`) and the recipient (who knows `a`) can compute this value, because computing it from `alpha`, `p`, `sigma`, and `beta` alone is the Diffie-Hellman problem.
+     4. Compute `y2 = delta * x mod p` — this masks the message `x` by multiplying it with the shared secret.
+     5. The encrypted group sent/written out is the pair `(sigma, y2)`.
+   - **Decrypting one group** (the recipient's side — not performed by this client, since it only ever encrypts *for* someone else, but this is how the person receiving the file recovers the key):
+     1. From the received `sigma`, recompute the same shared secret: `delta = sigma^a mod p`, using their own private key `a`. This equals `beta^b mod p` from the encryption side, since `sigma^a = (alpha^b)^a = alpha^(ab) = (alpha^a)^b = beta^b`, all mod `p`.
+     2. Compute the modular inverse `delta^-1 mod p` (since `p` is prime, this is `delta^(p-2) mod p` by Fermat's little theorem).
+     3. Recover `x = delta^-1 * y2 mod p`, since `delta^-1 * (delta * x) = x mod p`.
+   - **Repeating for all 11 groups** and writing each group's `(sigma, y2)` pair as its own output line reconstructs the full encrypted file; the recipient repeats the decryption step per line and reassembles the 11 recovered 4-byte groups back into the original 44-character base64 AES key string.
 8. Network I/O will not run on the UI thread; both tabs must stay responsive during a request, same as lab3.
 9. Server IP, port, and username continue to come from the local, gitignored `config.local.json`, shared by both tabs.
 10. Before any networking, the certificate verification code is checked against the test certificate and signature in spec section 13.5 (must verify) and against tampered copies of it (must fail), and the El Gamal encode/decode is checked against a local round trip using this project's own keypair, before either is wired to the real server.
