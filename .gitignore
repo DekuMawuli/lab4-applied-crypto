@@ -16,6 +16,7 @@ keypair.txt
 *.key
 *.hmac
 *.hmackey
+*.cert.tmp
 
 # Submission zip (a packaged copy of this repo; not itself source)
 *.zip
