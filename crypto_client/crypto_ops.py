@@ -1,5 +1,6 @@
 """AES-256-GCM file format (spec section 5) and the course's custom HMAC
 (spec section 6 / Lecture 7's nested-MAC "Protocol Two"), not RFC 2104 HMAC."""
+import base64
 import os
 
 from cryptography.hazmat.primitives import hashes
@@ -37,3 +38,9 @@ def custom_hmac(key: bytes, data: bytes) -> bytes:
     ki = bytes(b ^ 0x36 for b in key)
     ko = bytes(b ^ 0x5C for b in key)
     return sha256(ko + sha256(ki + data))
+
+
+def generate_aes_key_b64() -> str:
+    """A fresh random 256-bit AES key, standard base64 (44 chars), per the
+    Lab 4 handout's requirement 3 (this key is generated locally, not fetched)."""
+    return base64.b64encode(os.urandom(32)).decode("ascii")

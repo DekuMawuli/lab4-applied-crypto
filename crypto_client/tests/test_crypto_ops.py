@@ -1,6 +1,6 @@
 import base64
 
-from crypto_client.crypto_ops import encrypt_file, decrypt_local, custom_hmac
+from crypto_client.crypto_ops import encrypt_file, decrypt_local, custom_hmac, generate_aes_key_b64
 
 KEY = bytes(range(32))  # 00 01 02 ... 1f, the spec's section 9 vector key
 NONCE = bytes(range(12))  # 00 01 02 ... 0b, the spec's section 9 vector nonce
@@ -54,3 +54,13 @@ def test_custom_hmac_changes_when_file_contents_change():
     changed = custom_hmac(KEY, b"Hello world")  # one byte flipped
 
     assert base != changed
+
+
+def test_generate_aes_key_b64_is_well_formed():
+    s = generate_aes_key_b64()
+    assert len(s) == 44
+    assert len(base64.b64decode(s)) == 32
+
+
+def test_generate_aes_key_b64_is_random():
+    assert generate_aes_key_b64() != generate_aes_key_b64()
