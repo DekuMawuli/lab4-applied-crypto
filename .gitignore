@@ -1,0 +1,21 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Real server connection details (keep username out of the shared repo per spec section 11)
+config.local.json
+
+# Private El Gamal key for this course (never share this)
+keypair.txt
+
+# Generated key/encryption/HMAC/certificate artifacts (not source, regenerated per run)
+*.enc
+*.key
+*.hmac
+*.hmackey
+
+# Submission zip (a packaged copy of this repo; not itself source)
+*.zip
