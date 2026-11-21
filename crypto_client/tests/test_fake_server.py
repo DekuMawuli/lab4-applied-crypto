@@ -2,7 +2,7 @@ import pytest
 
 from crypto_client.crypto_ops import encrypt_file, custom_hmac
 from crypto_client.fake_server import FakeServer, BAD_USERNAME, MAX_TEST_PAYLOAD
-from crypto_client.net import connect, get_key, decrypt, verify_hmac, ServerError
+from crypto_client.net import connect, get_key, decrypt, verify_hmac, get_certificate, ServerError
 
 
 def test_get_key_then_decrypt_round_trip_returns_original_bytes():
@@ -46,3 +46,13 @@ def test_oversized_payload_raises_server_error():
         with connect(host, port) as sock:
             with pytest.raises(ServerError):
                 decrypt(sock, "student01", key=bytes(32), encrypted_bytes=b"x" * (MAX_TEST_PAYLOAD + 1))
+
+
+def test_get_certificate_round_trip_returns_stored_bytes_or_none_when_absent():
+    cert_bytes = b"fake-certificate-bytes-for-test"
+    with FakeServer(certificates={"mperkin2": cert_bytes}) as (host, port):
+        with connect(host, port) as sock:
+            assert get_certificate(sock, "student01", "mperkin2") == cert_bytes
+
+        with connect(host, port) as sock:
+            assert get_certificate(sock, "student01", "ghost") is None

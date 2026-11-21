@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from crypto_client.net import get_key, decrypt, verify_hmac, ServerError
+from crypto_client.net import get_key, decrypt, verify_hmac, get_certificate, ServerError
 
 
 class ScriptedSocket:
@@ -69,3 +69,30 @@ def test_error_reply_raises_server_error_not_confused_with_failed_verify():
 
     with pytest.raises(ServerError, match="username not recognized"):
         get_key(sock, "nobody")
+
+
+def test_get_certificate_returns_bytes_on_success():
+    sock = ScriptedSocket({"type": "certificate_result", "payload_len": 5}, b"certb")
+
+    data = get_certificate(sock, "student01", "mperkin2")
+
+    assert data == b"certb"
+    assert _sent_header(sock) == {
+        "type": "get_certificate",
+        "username": "student01",
+        "cert_username": "mperkin2",
+        "payload_len": 0,
+    }
+
+
+def test_get_certificate_returns_none_when_absent():
+    sock = ScriptedSocket({"type": "error", "detail": "no certificate for that user", "payload_len": 0})
+
+    assert get_certificate(sock, "student01", "ghost") is None
+
+
+def test_get_certificate_raises_on_other_error():
+    sock = ScriptedSocket({"type": "error", "detail": "username not recognized", "payload_len": 0})
+
+    with pytest.raises(ServerError):
+        get_certificate(sock, "student01", "mperkin2")

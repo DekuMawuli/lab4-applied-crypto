@@ -53,5 +53,14 @@ def verify_hmac(sock, username: str, key: bytes, mac: bytes, file_bytes: bytes) 
     return header["result"]
 
 
+def get_certificate(sock, username: str, cert_username: str) -> bytes | None:
+    send_message(sock, {"type": "get_certificate", "username": username, "cert_username": cert_username})
+    header, payload = recv_message(sock)
+    if header.get("type") == "error" and header.get("detail") == "no certificate for that user":
+        return None
+    header = _check_reply(header, "certificate_result")
+    return payload
+
+
 def connect(host: str, port: int, timeout: float = 30.0):
     return socket.create_connection((host, port), timeout=timeout)

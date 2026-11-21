@@ -48,6 +48,13 @@ class _Handler(socketserver.BaseRequestHandler):
             mac = base64.b64decode(header["hmac"])
             result = "VERIFIED" if custom_hmac(key, payload) == mac else "FAILED"
             send_message(self.request, {"type": "verify_result", "result": result})
+        elif msg_type == "get_certificate":
+            certificates = getattr(self.server, "certificates", {})
+            cert_bytes = certificates.get(header.get("cert_username"))
+            if cert_bytes is None:
+                send_message(self.request, {"type": "error", "detail": "no certificate for that user"})
+            else:
+                send_message(self.request, {"type": "certificate_result"}, payload=cert_bytes)
         else:
             send_message(self.request, {"type": "error", "detail": "unsupported type"})
 
@@ -55,8 +62,12 @@ class _Handler(socketserver.BaseRequestHandler):
 class FakeServer:
     """Use as a context manager: `with FakeServer() as (host, port): ...`"""
 
+    def __init__(self, certificates: dict[str, bytes] | None = None):
+        self._certificates = certificates or {}
+
     def __enter__(self):
         self._server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _Handler)
+        self._server.certificates = self._certificates
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
         return self._server.server_address
