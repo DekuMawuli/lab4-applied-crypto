@@ -4,6 +4,7 @@ custom HMAC compute/verify, unchanged from lab3) and a Lab 4 tab
 Only this module imports tkinter."""
 import base64
 import os
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
@@ -18,6 +19,9 @@ from crypto_client.ui_common import WorkerPanel
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent
 CA_INFO_PATH = CONFIG_DIR / "Pre_installed_CA_information.txt"
+
+# spec section 4.1: cert_username is 1-32 chars from A-Z a-z 0-9 _ - (no dot)
+CERT_USERNAME_RE = re.compile(r"[A-Za-z0-9_-]{1,32}")
 
 
 class Lab3Tab(ttk.Frame, WorkerPanel):
@@ -212,11 +216,21 @@ class Lab4Tab(ttk.Frame, WorkerPanel):
 
     def _on_get_certificate(self):
         fields = self._connection_fields()
-        cert_username = self.cert_username.get()
+        cert_username = self.cert_username.get().strip()
         if not fields or not cert_username:
             self._set_status("error", "Server IP, username, and recipient Andrew ID are required.")
             return
+        if not CERT_USERNAME_RE.fullmatch(cert_username):
+            self._set_status(
+                "error", "Recipient Andrew ID must be 1-32 characters from A-Z a-z 0-9 _ -"
+            )
+            return
         host, port, username = fields
+
+        # Clear any previously verified certificate before this fetch even starts: if this
+        # fetch fails or is for a different recipient, a stale public key for someone else
+        # must never be left behind for "Encrypt Key for Recipient" to pick up.
+        self._verified_cert = None
 
         def work():
             with net.connect(host, port) as sock:
@@ -249,8 +263,10 @@ class Lab4Tab(ttk.Frame, WorkerPanel):
         lines = encode_b64_string(
             self._aes_key_b64, self._verified_cert.public_key, self._ca_info.p, self._ca_info.alpha
         )
-        out_path = str(CONFIG_DIR / f"{self.cert_username.get()}_encrypted_key.txt")
-        Path(out_path).write_text("\r\n".join(lines) + "\r\n")
+        # Named from the verified certificate's own username, not the live entry field --
+        # they can differ if the field was edited after the last successful fetch.
+        out_path = str(CONFIG_DIR / f"{self._verified_cert.username}_encrypted_key.txt")
+        Path(out_path).write_bytes(("\r\n".join(lines) + "\r\n").encode("ascii"))
         self._set_status("ok", f"Encrypted -> {out_path}")
 
 

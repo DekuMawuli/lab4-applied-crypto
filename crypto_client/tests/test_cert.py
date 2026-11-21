@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from crypto_client.ca_info import load_ca_info
-from crypto_client.cert import CertificateError, verify_certificate
+from crypto_client.cert import CertificateError, _check_fields, verify_certificate
 
 TEST_CERT = (
     "prime number basis = 4294967291\r\n"
@@ -42,6 +42,56 @@ def test_wrong_requested_username_rejected(ca_info_fixture):
 
 
 def test_p_alpha_mismatch_rejected(ca_info_fixture):
-    bad_info = dataclasses.replace(ca_info_fixture, p=999999937)
-    with pytest.raises(CertificateError):
+    # p must stay well above the certificate's public key (1034503561), otherwise
+    # the range check would reject it first and this would no longer test the
+    # p/alpha comparison at all.
+    bad_info = dataclasses.replace(ca_info_fixture, p=4294967290)
+    with pytest.raises(CertificateError, match="p/alpha"):
         verify_certificate(TEST_CERT, "mperkin2", bad_info)
+
+
+def test_check_fields_rejects_p_mismatch(ca_info_fixture):
+    with pytest.raises(CertificateError, match="p/alpha"):
+        _check_fields(
+            p=ca_info_fixture.p + 1,
+            alpha=ca_info_fixture.alpha,
+            username="mperkin2",
+            public_key=1034503561,
+            expected_username="mperkin2",
+            ca_info=ca_info_fixture,
+        )
+
+
+def test_check_fields_rejects_alpha_mismatch(ca_info_fixture):
+    with pytest.raises(CertificateError, match="p/alpha"):
+        _check_fields(
+            p=ca_info_fixture.p,
+            alpha=ca_info_fixture.alpha + 1,
+            username="mperkin2",
+            public_key=1034503561,
+            expected_username="mperkin2",
+            ca_info=ca_info_fixture,
+        )
+
+
+def test_check_fields_rejects_public_key_out_of_range(ca_info_fixture):
+    with pytest.raises(CertificateError, match="out of range"):
+        _check_fields(
+            p=ca_info_fixture.p,
+            alpha=ca_info_fixture.alpha,
+            username="mperkin2",
+            public_key=ca_info_fixture.p,  # must be <= p - 1, this is one over
+            expected_username="mperkin2",
+            ca_info=ca_info_fixture,
+        )
+
+
+def test_check_fields_accepts_valid_fields(ca_info_fixture):
+    _check_fields(
+        p=ca_info_fixture.p,
+        alpha=ca_info_fixture.alpha,
+        username="mperkin2",
+        public_key=1034503561,
+        expected_username="mperkin2",
+        ca_info=ca_info_fixture,
+    )

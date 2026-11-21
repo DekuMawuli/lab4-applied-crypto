@@ -18,5 +18,10 @@ keypair.txt
 *.hmackey
 *.cert.tmp
 
+# Generated AES key material and El Gamal-encrypted key files (Lab 4) -- the
+# plaintext key must never sit next to its ciphertext in the shared repo
+aes_key*.txt
+*_encrypted_key.txt
+
 # Submission zip (a packaged copy of this repo; not itself source)
 *.zip
