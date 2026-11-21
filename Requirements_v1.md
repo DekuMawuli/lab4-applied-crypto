@@ -1,33 +1,53 @@
-Overview: The project is a TCP client for Applied Cryptography Lab 4 ("El Gamal and Certificates"), extending the lab3 client against the updated protocol in `crypto_message_spec_v3.md`. It adds two things on top of lab3's AES/HMAC functionality: (1) fetching a user's certificate from the crypto server by Andrew ID and verifying its RSA signature came from the course CA, establishing trust in the public key it carries; (2) El Gamal-encrypting a freshly generated 256-bit AES key (its base64 text, 4 bytes/32 bits at a time) under a verified recipient's public key, so only that recipient can recover the AES key. The lecturer said to reuse the lab3 interface, so the app will have two tabs: Lab 3's existing functionality unchanged in one tab, and the new certificate/El Gamal functionality in a second tab.
+# Lab 4 — Requirements v1
 
-Project Requirements
-1. The code will be written in Python 3, reusing lab3's `crypto_client` package (protocol.py, net.py, crypto_ops.py, config.py, companions.py) unchanged where the spec didn't change.
-2. The user interface will use tkinter with a notebook of two tabs: Tab 1 reproduces lab3's client (Get Key, Encrypt, Decrypt, Compute HMAC, Verify HMAC) exactly. Tab 2 adds the lab4 workflow: enter a classmate's Andrew ID, fetch and verify their certificate, generate a random AES key, and El Gamal-encrypt that key for the verified recipient.
-3. The CA's parameters (`p`, `alpha`) and public RSA key are read from `Pre_installed_CA_information.txt`, which is treated as if installed by the system administrator, not entered by hand.
-4. A certificate is fetched with the new `get_certificate` message (spec section 4.1), naming the target user's Andrew ID in `cert_username`. The one specific error, `"no certificate for that user"`, is shown to the user as its own message, not as a program failure (same pattern as lab3's `verify_hmac` FAILED-vs-error distinction).
-5. A certificate is only trusted after verification succeeds, in the order spec section 13.3 lists: the file matches the 6-line CRLF format, the RSA-PSS/SHA-256/MGF1-SHA256/salt-32 signature verifies against the CA's public key, the certificate's own username matches the Andrew ID requested, the certificate's `p`/`alpha` match the pre-installed values, and the public key is in range `1..p-1`. A certificate that fails any of these is rejected and its public key is never used.
-6. A random 256-bit AES key is generated locally (not fetched from the server) and written out as a standard base64 string (44 characters), per the Lab 4 handout's requirement 3.
-7. That base64 string is El Gamal-encrypted 4 bytes (32 bits) at a time, using the recipient's verified public key and the shared `p`/`alpha`. Each group's `(sigma, y2)` pair is written as 8 big-endian bytes, base64-encoded to a 12-character line, one line per group, CRLF-terminated, 11 lines total for the 44-character key text.
+## Overview
 
-   End-to-end El Gamal procedure, worked out from the class's definitions below (`p` prime, `alpha` a primitive element mod `p`, both shared by everyone; every user's own private key is a secret integer `a`, and their public key is `beta = alpha^a mod p`, which is what ends up on their signed certificate):
-   - **Setup (done once, already completed for this course):** each user picks a private key `a`, a random integer, and publishes `beta = alpha^a mod p` as their public key.
-   - **Splitting the message:** the 44-character base64 AES key string is split into 11 groups of 4 ASCII characters each, in order. Each group's 4 bytes are read as one big-endian 32-bit unsigned integer `x` — the message for that group.
-   - **Encrypting one group**, for a recipient whose verified public key is `beta`:
-     1. Pick a fresh random secret integer `b` in `{1, ..., p-1}` (a new `b` for every group — never reused).
-     2. Compute `sigma = alpha^b mod p`. This is sent in the clear; it lets the recipient rebuild the same shared secret without ever knowing `b` itself.
-     3. Compute the shared secret `delta = beta^b mod p`. Nobody except the sender (who knows `b`) and the recipient (who knows `a`) can compute this value, because computing it from `alpha`, `p`, `sigma`, and `beta` alone is the Diffie-Hellman problem.
-     4. Compute `y2 = delta * x mod p` — this masks the message `x` by multiplying it with the shared secret.
-     5. The encrypted group sent/written out is the pair `(sigma, y2)`.
-   - **Decrypting one group** (the recipient's side — not performed by this client, since it only ever encrypts *for* someone else, but this is how the person receiving the file recovers the key):
-     1. From the received `sigma`, recompute the same shared secret: `delta = sigma^a mod p`, using their own private key `a`. This equals `beta^b mod p` from the encryption side, since `sigma^a = (alpha^b)^a = alpha^(ab) = (alpha^a)^b = beta^b`, all mod `p`.
-     2. Compute the modular inverse `delta^-1 mod p` (since `p` is prime, this is `delta^(p-2) mod p` by Fermat's little theorem).
-     3. Recover `x = delta^-1 * y2 mod p`, since `delta^-1 * (delta * x) = x mod p`.
-   - **Repeating for all 11 groups** and writing each group's `(sigma, y2)` pair as its own output line reconstructs the full encrypted file; the recipient repeats the decryption step per line and reassembles the 11 recovered 4-byte groups back into the original 44-character base64 AES key string.
-8. Network I/O will not run on the UI thread; both tabs must stay responsive during a request, same as lab3.
-9. Server IP, port, and username continue to come from the local, gitignored `config.local.json`, shared by both tabs.
-10. Before any networking, the certificate verification code is checked against the test certificate and signature in spec section 13.5 (must verify) and against tampered copies of it (must fail), and the El Gamal encode/decode is checked against a local round trip using this project's own keypair, before either is wired to the real server.
-11. The private El Gamal key generated for this course (in `keypair.txt`) is never committed to the shared git repository, same as lab3's rule for the username.
+This project is a TCP client for Applied Cryptography Lab 4. We are adding certificate verification and El Gamal encryption to the work already done in Lab 3. The program will request another user's certificate from the crypto server, verify that the certificate was signed by the course CA, and then use the public key from that certificate to encrypt a randomly generated 256-bit AES key. The base64 version of the AES key is what will be encrypted.
 
-Open questions
-- Whether the Lab 4 tab needs its own "Decrypt"/recover path (using my own private key) for a key someone else sent me, or whether the handout only requires the sending side (fetch + verify + generate + encrypt).
-- Whether one shared status/progress row serves both tabs or each tab should show its own, given they can run independent actions.
+The lecturer said we should reuse the Lab 3 interface. For this reason, the program will have two tabs. The first tab will keep the Lab 3 AES and HMAC functions, while the second tab will contain the new Lab 4 work.
+
+## Project Requirements
+
+1. The code will be written in Python 3.
+2. The user interface will use tkinter and will have two tabs.
+3. The first tab will keep the Lab 3 functions: Get Key, Encrypt, Decrypt, Compute HMAC, and Verify HMAC.
+4. The second tab will allow the user to enter the Andrew ID of the person they want to send an AES key to.
+5. The program will request that user's certificate from the crypto server using the `get_certificate` message described in `crypto_message_spec_v3.md`.
+6. If the server returns `no certificate for that user`, the program must show that message to the user. This should not be treated as a program crash.
+7. The CA information will be read from `Pre_installed_CA_information.txt`. This includes the prime number `p`, the primitive element `alpha`, and the CA's public RSA key. The user should not have to type these values into the program.
+8. The certificate must be checked before its public key can be used. The program must verify all of the following:
+   - The certificate has the correct 6-line format and uses CRLF line endings.
+   - The signature covers lines 1 through 5, including the CRLF ending on each line.
+   - The RSA signature is valid using RSA-PSS with SHA-256, MGF1 with SHA-256, and a salt length of 32 bytes.
+   - The username inside the certificate matches the Andrew ID that was requested.
+   - The certificate's `p` and `alpha` values match the values in `Pre_installed_CA_information.txt`.
+   - The public key is between 1 and `p - 1`.
+9. If any certificate check fails, the certificate must be rejected and the public key inside it must not be used.
+10. After a certificate has been verified, the program will randomly generate a 256-bit AES key on the local computer.
+11. The AES key will be converted to standard base64. The result should be 44 characters long and must be saved to a text file.
+12. The program will encrypt the 44-character base64 AES key using El Gamal and the verified public key of the person receiving it.
+13. The base64 AES key will be divided into 11 groups of 4 characters. Each group will be read as one 32-bit unsigned integer in big-endian order.
+14. A new random El Gamal value `b` between 1 and `p - 2` must be generated for every group. The same value must not be reused for another group.
+15. For each group, the program will calculate `sigma = alpha^b mod p`, `delta = public_key^b mod p`, and `y2 = delta * message mod p`.
+16. For each encrypted group, `sigma` and `y2` will each be stored as a 4-byte big-endian unsigned integer. The 8 bytes will then be base64 encoded into one 12-character line.
+17. The El Gamal output file will contain 11 lines in the correct order. Every line must end with CRLF and the file must not contain any other text.
+18. Network requests must not run on the tkinter UI thread because the window needs to stay responsive while waiting for the server.
+19. The server IP, port, and my username will continue to come from the local `config.local.json` file used for Lab 3. This file must not be committed to the shared repository.
+20. The private El Gamal key in `keypair.txt` must not be displayed, logged, sent to the server, or committed to the shared repository.
+21. Before using the real server, certificate verification must be tested with the certificate example in `crypto_message_spec_v3.md`. The correct certificate must pass, while a certificate with changed information must fail.
+22. The El Gamal code must also be tested locally by encrypting and decrypting a sample key with a matching key pair. The decrypted result must be the same as the original 44-character base64 AES key.
+
+## Constraints and Important Details
+
+- The public key can only be trusted after the certificate has passed every verification check.
+- We are encrypting the 44 ASCII characters of the base64 AES key, not the original 32 raw key bytes.
+- The order of the 11 groups must not change.
+- A fresh random value `b` is required for each of the 11 groups.
+- The Lab 3 functions should still work after the Lab 4 functions are added.
+- The CA information is public information, but `keypair.txt` and `config.local.json` contain private information and must remain local.
+
+## Open Questions
+
+1. Does the Lab 4 program only need to encrypt an AES key for another user, or should it also allow me to decrypt an El Gamal file that somebody sends to me? If decryption is required, the program will need a safe way to read my private key and choose an encrypted input file.
+2. Should fetching and verifying the certificate be one action, followed by a separate action for generating and encrypting the AES key? Keeping them separate will make it easier to see which step failed, but one combined button would make the workflow shorter.
+3. Should each tab have its own progress bar and status message, or should both tabs share one? Separate status areas may make errors clearer when switching between the Lab 3 and Lab 4 work.
