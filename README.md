@@ -30,6 +30,41 @@ Source repository: <https://github.com/DekuMawuli/lab4-applied-crypto>
   the original file byte-for-byte, HMAC verify returns `VERIFIED` then
   `FAILED` after a one-byte tamper (both unchanged from lab3), and two real
   certificate fetch + verify + El Gamal key encryptions, for `mperkin2` and a
-  classmate (`oobed`). Key material is never committed (`.key`/`.hmackey`/
+  classmate (`oobed`), including a confirmed two-way exchange with that
+  classmate (see below). Key material is never committed (`.key`/`.hmackey`/
   `keypair.txt`/`config.local.json`/the El Gamal-encrypted key exchange files
   are all gitignored).
+
+## Screenshots: the app working against the real server
+
+Captured by driving the real UI (`results/screenshots/_capture_demo.py`) through
+both tabs end-to-end, since the AES/HMAC/El Gamal keys themselves can't be
+shared for someone else to re-run this independently.
+
+| | |
+|---|---|
+| ![Initial state](results/screenshots/01_initial_state.png) | ![Lab 3: key fetched](results/screenshots/02_lab3_get_key.png) |
+| Initial state, idle, both tabs ready | Lab 3 tab, after `Get Key` — unchanged from lab3 |
+| ![Lab 4 tab](results/screenshots/05_lab4_tab_initial.png) | ![Certificate verified](results/screenshots/06_lab4_certificate_verified.png) |
+| Lab 4 tab, idle | After `Get Certificate` for classmate `oobed` — real server fetch, RSA-PSS signature verified, public key `3312833251` |
+| ![Key encrypted](results/screenshots/08_lab4_key_encrypted_for_recipient.png) | |
+| After `Encrypt Key for Recipient` — El Gamal-encrypted AES key written for `oobed` | |
+
+## Two-way key exchange with a classmate (`oobed`)
+
+This wasn't just a one-sided test — a real classmate (Obed) and I exchanged
+El Gamal-encrypted AES keys both directions and independently confirmed them:
+
+1. I fetched and verified `oobed`'s certificate, generated an AES key, encrypted
+   it for him, and uploaded it to the shared Drive. He decrypted it with his
+   private key and confirmed he got the exact key I generated.
+2. He did the same for me: generated his own AES key, encrypted it with *my*
+   verified public key, and also encrypted a short note with that AES key,
+   uploading both to the shared Drive.
+3. I downloaded both files, decrypted the AES key with my private key (via
+   `elgamal.decode_b64_lines`, the same function `encode_b64_string`'s round-trip
+   tests use), then decrypted his note locally with that recovered key
+   (`crypto_ops.decrypt_local`) and got back the plaintext `"Hi Mawuli"` —
+   proving the whole chain (certificate trust → El Gamal key transport → AES
+   decrypt) works correctly in both directions, between two independently
+   built clients.

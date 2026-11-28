@@ -37,6 +37,31 @@ private key. The encrypted files themselves are not committed to this
 repository (gitignored, regenerated per run — same policy as lab3's `.enc`
 files) since they're one-off artifacts for the Drive exchange, not source.
 
+### Confirmed both directions, with a real classmate
+
+- **mdeku → oobed**: Obed confirmed by email that decrypting
+  `oobed_mdeku_AES_enc_key.txt` with his private key reproduced the exact AES
+  key generated above.
+- **oobed → mdeku**: Obed uploaded `mdeku_oobed_AES_enc_key.txt` (his own
+  generated AES key, El Gamal-encrypted with *my* verified public key — 11
+  lines, 154 bytes, same format) and `mdeku_oobed_testnote2.txt.enc` (a short
+  note, AES-256-GCM-encrypted with that key). I downloaded both,
+  recovered the AES key with `elgamal.decode_b64_lines` and my private key,
+  then decrypted the note locally with `crypto_ops.decrypt_local`:
+  **plaintext recovered: `"Hi Mawuli"`.**
+
+This is the strongest evidence in this submission: two independently built
+clients, following only the shared spec and each other's certificates,
+produced a working encrypted channel without either side needing to trust
+anything but the CA's signature.
+
+## Screenshots
+
+`results/screenshots/_capture_demo.py` drives the real two-tab UI against the
+real server (Lab 3: Get Key → Encrypt → Decrypt; Lab 4: Get Certificate for
+`oobed` → Generate AES Key → Encrypt Key for Recipient) and screenshots the
+actual window at each step — see the README for the captured images.
+
 ## Automated test suite
 
 `.venv/bin/python -m pytest crypto_client/ --ignore=crypto_client/tests/test_ui_common.py`
