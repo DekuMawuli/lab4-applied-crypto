@@ -19,9 +19,13 @@ keypair.txt
 *.cert.tmp
 
 # Generated AES key material and El Gamal-encrypted key files (Lab 4) -- the
-# plaintext key must never sit next to its ciphertext in the shared repo
+# plaintext key must never sit next to its ciphertext in the shared repo.
+# These are regenerated artifacts for the shared Google Drive exchange, not
+# source, following the <recipient>_<sender>_<description> naming convention.
 aes_key*.txt
 *_encrypted_key.txt
+*_AES_enc_key.txt
+*_lab4test.txt.enc
 
 # Submission zip (a packaged copy of this repo; not itself source)
 *.zip
